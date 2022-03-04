@@ -81,7 +81,7 @@ def run_search(dict_file, postings_file, queries_file, results_file):
                         op_stack.pop()
                     else:
                         op_stack.append(tok)
-                else:
+                else: # term normalization and formatting
                     posting = []
                     freq = 0
                     tok = stemmer.stem(tok.lower()).strip(punctuation)
@@ -153,20 +153,24 @@ def and_optimizer(op_stack, term_stack):
     if count > 6 and len(term_stack) > count:
         and_terms = [] # Normal terms
         and_not_terms = [] # NOT terms
+        min = 9999
+        min_term = ()
 
         for i in range(count + 1):
             term = term_stack.pop()
             if term[0] == 0:
+                if term[2] < min:
+                    min = term[2]
+                    min_term = term
                 and_terms.append(term)
             else:
                 and_not_terms.append(term)
 
-        # Sorts normal terms based on doc frequency
-        and_terms = sorted(and_terms, key=itemgetter(2), reverse=True)
-
-        # Pushes normal terms onto the stack in descending order based on doc frequency
         for term in and_terms:
-            term_stack.append(term)
+            if term != min_term:
+                term_stack.append(term)
+
+        term_stack.append(min_term)
 
         # Pushes NOT terms on top of the normal terms to be evaluated first
         for term in and_not_terms:
@@ -184,23 +188,30 @@ def or_optimizer(op_stack, term_stack):
             break
 
     if count > 3 and len(term_stack) > count:
-        or_terms = []
-        or_not_terms = []
+        nots = False
 
-        for i in range(count + 1):
-            term = term_stack.pop()
-            if term[0] == 0:
-                or_terms.append(term)
-            else:
-                or_not_terms.append(term)
+        for i in range(count):
+            if term_stack[-i][0] == 1:
+                nots = True
+                break
 
-        or_not_terms = sorted(or_not_terms, key=itemgetter(2), reverse=True)
+        if nots:
+            terms = []
+            min = 9999
+            min_term = ()
 
-        for term in or_terms:
-            term_stack.append(term)
+            for i in range(count + 1):
+                term = term_stack.pop()
+                if term[0] == 1 and term[2] < min:
+                    min = term[2]
+                    min_term = term
+                terms.append(term)
 
-        for term in or_not_terms:
-            term_stack.append(term)
+            for term in terms:
+                if term != min_term:
+                    term_stack.append(term)
+
+            term_stack.append(min_term)
 
 
 # Applies an operator to two terms
